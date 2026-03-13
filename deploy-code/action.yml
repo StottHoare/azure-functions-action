@@ -102,18 +102,67 @@ runs:
       with:
         app-name: ${{ steps.resolve.outputs.appName }}
         resource-group: ${{ steps.resolve.outputs.resourceGroup }}
-        pre-deploy-states: ${{ steps.save.outputs.pre-deploy-states }}
+
+    - name: Evaluate rollback
+      id: eval-rollback
+      if: steps.health-check.outputs.healthy != 'true'
+      shell: bash
+      run: |
+        PRE_DEPLOY_STATES="${{ steps.save.outputs.pre-deploy-states }}"
+        SHOULD_ROLLBACK="true"
+        if [ -n "$PRE_DEPLOY_STATES" ]; then
+          ALL_PRE_STOPPED=true
+          for state in $(echo "$PRE_DEPLOY_STATES" | tr ',' '\n'); do
+            if [ "$state" != "STOPPED" ]; then
+              ALL_PRE_STOPPED=false
+              break
+            fi
+          done
+          if [ "$ALL_PRE_STOPPED" = "true" ]; then
+            echo "Pre-deploy instances were all STOPPED — rollback would restore a broken state, skipping"
+            SHOULD_ROLLBACK="false"
+          fi
+        fi
+        echo "should-rollback=$SHOULD_ROLLBACK" >> "$GITHUB_OUTPUT"
+
+    - name: Fetch function logs
+      if: steps.health-check.outputs.healthy != 'true'
+      shell: bash
+      run: |
+        APP="${{ steps.resolve.outputs.appName }}"
+        RG="${{ steps.resolve.outputs.resourceGroup }}"
+        echo "=== Fetching recent function logs ==="
+        az webapp log download \
+          --name "$APP" \
+          --resource-group "$RG" \
+          --log-file function_logs.zip 2>/dev/null || true
+
+        if [ -f function_logs.zip ] && [ -s function_logs.zip ]; then
+          unzip -o function_logs.zip -d function_logs 2>/dev/null || true
+          LOG_FILES=$(find function_logs -name "*.log" | sort -r | head -5)
+          if [ -n "$LOG_FILES" ]; then
+            echo "$LOG_FILES" | while read -r f; do
+              echo "--- $f ---"
+              tail -100 "$f"
+              echo ""
+            done
+          else
+            echo "No log files found in download"
+          fi
+        else
+          echo "Log download unavailable or empty"
+        fi
 
     - name: Rollback
       id: rollback
-      if: steps.health-check.outputs.healthy != 'true'
+      if: steps.health-check.outputs.healthy != 'true' && steps.eval-rollback.outputs.should-rollback == 'true'
       uses: StottHoare/azure-functions-action/rollback@main
       with:
         app-name: ${{ steps.resolve.outputs.appName }}
 
     - name: Health Check (post-rollback)
       id: health-check-post-rollback
-      if: steps.health-check.outputs.healthy != 'true'
+      if: steps.health-check.outputs.healthy != 'true' && steps.eval-rollback.outputs.should-rollback == 'true'
       uses: StottHoare/azure-functions-action/check-health@main
       with:
         app-name: ${{ steps.resolve.outputs.appName }}
@@ -123,7 +172,9 @@ runs:
       if: steps.health-check.outputs.healthy != 'true'
       shell: bash
       run: |
-        if [ "${{ steps.health-check-post-rollback.outputs.healthy }}" = "true" ]; then
+        if [ "${{ steps.eval-rollback.outputs.should-rollback }}" != "true" ]; then
+          echo "Deployment was unhealthy — rollback skipped as pre-deploy state was also broken"
+        elif [ "${{ steps.health-check-post-rollback.outputs.healthy }}" = "true" ]; then
           echo "Deployment was unhealthy — rolled back to previous version successfully"
         else
           echo "Deployment was unhealthy and rollback also failed — manual intervention required"

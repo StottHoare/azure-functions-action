@@ -128,7 +128,7 @@ If the download fails or returns an empty file (e.g. on a first deploy), a warni
 
 | Name                | Description                                                                                       |
 | ------------------- | ------------------------------------------------------------------------------------------------- |
-| `pre-deploy-states` | Comma-separated instance states captured before deployment. Pass to `check-health` for baseline. |
+| `pre-deploy-states` | Comma-separated instance states captured before deployment. Used to determine whether rollback is worth attempting. |
 
 ---
 
@@ -136,15 +136,14 @@ If the download fails or returns an empty file (e.g. on a first deploy), a warni
 
 Queries instance states via `az webapp list-instances`. Waits 10 seconds for the function host to restart, then retries up to 6 times (30 seconds apart) before reporting a result.
 
-All instances `READY` is healthy. Any `STOPPED` instance is unhealthy. If `pre-deploy-states` shows all instances were already `STOPPED` before deployment, the health check is skipped and `healthy` is set to `true`.
+All instances `READY` is healthy. Any `STOPPED` instance is unhealthy.
 
 **Inputs**
 
-| Name                | Required | Description                                                                                        |
-| ------------------- | -------- | -------------------------------------------------------------------------------------------------- |
-| `app-name`          | yes      | Full Azure Function App name                                                                       |
-| `resource-group`    | yes      | Azure resource group containing the Function App                                                   |
-| `pre-deploy-states` | no       | Comma-separated instance states from the `save` action. Used to skip health check if all were already `STOPPED`. |
+| Name             | Required | Description                              |
+| ---------------- | -------- | ---------------------------------------- |
+| `app-name`       | yes      | Full Azure Function App name             |
+| `resource-group` | yes      | Azure resource group containing the Function App |
 
 **Outputs**
 
@@ -315,7 +314,6 @@ jobs:
         with:
           app-name: shd-DataGateway-func
           resource-group: shd-prod-rg
-          pre-deploy-states: ${{ steps.save.outputs.pre-deploy-states }}
 
       - name: Rollback if unhealthy
         id: rollback
