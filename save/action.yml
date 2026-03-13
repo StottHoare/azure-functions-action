@@ -10,8 +10,11 @@ inputs:
     required: true
 
 outputs:
+  pre-deploy-instance-ids:
+    description: Comma-separated instance IDs captured before deployment
+    value: ${{ steps.snapshot.outputs.pre-deploy-instance-ids }}
   pre-deploy-states:
-    description: Newline-separated instance states captured before deployment
+    description: Comma-separated instance states captured before deployment
     value: ${{ steps.snapshot.outputs.pre-deploy-states }}
 
 runs:
@@ -21,14 +24,22 @@ runs:
       id: snapshot
       shell: bash
       run: |
-        STATES=$(az webapp list-instances \
+        INSTANCE_DATA=$(az webapp list-instances \
           --name "${{ inputs.app-name }}" \
           --resource-group "${{ inputs.resource-group }}" \
-          --query "[].state" -o tsv 2>/dev/null || echo "")
-        echo "Pre-deploy instance states: '$STATES'"
-        # Store as comma-separated for safe output encoding
-        STATES_CSV=$(echo "$STATES" | tr '\n' ',' | sed 's/,$//')
-        echo "pre-deploy-states=$STATES_CSV" >> "$GITHUB_OUTPUT"
+          --query "[].join('|', [name, state])" -o tsv 2>/dev/null || echo "")
+        echo "Pre-deploy instances: '$INSTANCE_DATA'"
+        INSTANCE_IDS=""
+        INSTANCE_STATES=""
+        while IFS= read -r entry; do
+          [ -z "$entry" ] && continue
+          id="${entry%|*}"
+          state="${entry#*|}"
+          INSTANCE_IDS="${INSTANCE_IDS:+$INSTANCE_IDS,}$id"
+          INSTANCE_STATES="${INSTANCE_STATES:+$INSTANCE_STATES,}$state"
+        done <<< "$INSTANCE_DATA"
+        echo "pre-deploy-instance-ids=$INSTANCE_IDS" >> "$GITHUB_OUTPUT"
+        echo "pre-deploy-states=$INSTANCE_STATES" >> "$GITHUB_OUTPUT"
 
     - name: Get Azure bearer token
       id: get-token

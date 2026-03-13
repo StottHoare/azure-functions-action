@@ -102,6 +102,7 @@ runs:
       with:
         app-name: ${{ steps.resolve.outputs.appName }}
         resource-group: ${{ steps.resolve.outputs.resourceGroup }}
+        pre-deploy-instance-ids: ${{ steps.save.outputs.pre-deploy-instance-ids }}
 
     - name: Evaluate rollback
       id: eval-rollback
