@@ -84,6 +84,7 @@ runs:
         echo "resourceGroup=$RG" >> "$GITHUB_OUTPUT"
 
     - name: Save current deployment
+      id: save
       uses: StottHoare/azure-functions-action/save@main
       with:
         app-name: ${{ steps.resolve.outputs.appName }}
@@ -101,6 +102,7 @@ runs:
       with:
         app-name: ${{ steps.resolve.outputs.appName }}
         resource-group: ${{ steps.resolve.outputs.resourceGroup }}
+        pre-deploy-states: ${{ steps.save.outputs.pre-deploy-states }}
 
     - name: Rollback
       id: rollback
