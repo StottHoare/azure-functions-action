@@ -145,7 +145,7 @@ All instances `READY` is healthy. Any `STOPPED` instance is unhealthy.
 | ------------------------- | -------- | -------------------------------------------------------------------------------------------------------- |
 | `app-name`                | yes      | Full Azure Function App name                                                                             |
 | `resource-group`          | yes      | Azure resource group containing the Function App                                                         |
-| `pre-deploy-instance-ids` | no       | Comma-separated instance IDs from `save`. New instances (IDs not in this list) are used for health evaluation; old instances cycling out are ignored. |
+| `pre-deploy-instance-ids` | yes      | Comma-separated instance IDs from `save`. New instances (IDs not in this list) are used for health evaluation; old instances cycling out are ignored. |
 
 **Outputs**
 

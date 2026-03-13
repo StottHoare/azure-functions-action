@@ -10,8 +10,7 @@ inputs:
     required: true
   pre-deploy-instance-ids:
     description: Comma-separated instance IDs captured before deployment (from save action)
-    required: false
-    default: ''
+    required: true
 
 outputs:
   healthy:
@@ -50,7 +49,7 @@ runs:
           if [ -z "$INSTANCE_DATA" ]; then
             echo "No instances found yet."
             ALL_POLLS_READY=false
-          elif [ -n "$PRE_IDS" ]; then
+          else
             NEW_SEEN=false
             ALL_NEW_READY=true
 
@@ -88,26 +87,6 @@ runs:
             else
               echo "New instances found but not all READY — waiting..."
               ALL_POLLS_READY=false
-            fi
-          else
-            # Fallback: no pre-deploy IDs, use transitional state detection
-            SEEN_TRANSITIONAL=false
-            STATES=$(echo "$INSTANCE_DATA" | sed 's/[^|]*|//')
-            TRANSITIONAL=$(echo "$STATES" | grep -vE '^(READY|STOPPED)$' || true)
-
-            if [ -n "$TRANSITIONAL" ]; then
-              echo "Instances still transitioning: $TRANSITIONAL"
-              SEEN_TRANSITIONAL=true
-              ALL_POLLS_READY=false
-            elif echo "$STATES" | grep -q '^STOPPED$'; then
-              echo "One or more instances STOPPED — waiting..."
-              ALL_POLLS_READY=false
-            else
-              echo "All instances READY"
-              if [ "$SEEN_TRANSITIONAL" = "true" ]; then
-                HEALTHY="true"
-                break
-              fi
             fi
           fi
 
