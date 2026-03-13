@@ -1,8 +1,6 @@
 # azure-functions-action
 
-Composite GitHub Actions for Azure Function App deployment lifecycle: build and deploy a .NET function app, check health via Application Insights, and roll back automatically if needed.
-
-> **Prerequisite:** Basic auth must be disabled on the Function App — these actions authenticate via Azure AD bearer token. The `save`, `check-health`, and `rollback` actions require a prior `azure/login@v2` step; `deploy-code` handles login internally.
+GitHub Actions for Azure Function App deployment lifecycle: build and deploy a .NET function app, check health via Application Insights, and roll back automatically if needed.
 
 ---
 
@@ -13,6 +11,7 @@ Composite GitHub Actions for Azure Function App deployment lifecycle: build and 
 Deploys a Bicep template at subscription scope. On failure, runs a Python script (`ServiceDeployment/Scripts/get_bicep_deployment_errors.py`) to surface detailed error messages before exiting non-zero.
 
 **Caller responsibilities:**
+
 - Run `actions/checkout@v4` (with submodules if needed) before calling this action
 - Set `permissions: id-token: write, contents: read` on the job
 - Set `environment:` on the job if required
@@ -20,17 +19,17 @@ Deploys a Bicep template at subscription scope. On failure, runs a Python script
 
 **Inputs**
 
-| Name | Required | Description |
-|------|----------|-------------|
-| `deployment-name` | yes | Name of the deployment. `-{environment}` is appended. Keep it short. |
-| `environment` | yes | Environment name e.g. `Development`, `Production` |
-| `github-action-client-id` | yes | Client ID of the GitHub Actions service principal |
-| `github-action-object-id` | yes | Object ID of the GitHub Actions service principal, passed to Bicep for role assignments |
-| `subscription-id` | yes | Azure Subscription ID |
-| `tenant-id` | yes | Azure Tenant ID |
-| `app-service-source-control-token` | yes | GitHub PAT with `repo` scope, registered at subscription level to allow `Microsoft.Web/sites/sourcecontrols` to deploy via service principal |
-| `template-file` | no | Path to the main `.bicep` file. Defaults to `Deployments/Main.bicep`. |
-| `azure-region` | no | Azure region for the deployment. Defaults to `australiaeast`. |
+| Name                               | Required | Description                                                                                                                                  |
+| ---------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `deployment-name`                  | yes      | Name of the deployment. `-{environment}` is appended. Keep it short.                                                                         |
+| `environment`                      | yes      | Environment name e.g. `Development`, `Production`                                                                                            |
+| `github-action-client-id`          | yes      | Client ID of the GitHub Actions service principal                                                                                            |
+| `github-action-object-id`          | yes      | Object ID of the GitHub Actions service principal, passed to Bicep for role assignments                                                      |
+| `subscription-id`                  | yes      | Azure Subscription ID                                                                                                                        |
+| `tenant-id`                        | yes      | Azure Tenant ID                                                                                                                              |
+| `app-service-source-control-token` | yes      | GitHub PAT with `repo` scope, registered at subscription level to allow `Microsoft.Web/sites/sourcecontrols` to deploy via service principal |
+| `template-file`                    | no       | Path to the main `.bicep` file. Defaults to `Deployments/Main.bicep`.                                                                        |
+| `azure-region`                     | no       | Azure region for the deployment. Defaults to `australiaeast`.                                                                                |
 
 **Example**
 
@@ -67,21 +66,22 @@ jobs:
 Runs a what-if deployment for a Bicep template at subscription scope. Useful in PR workflows to preview infrastructure changes before merging.
 
 **Caller responsibilities:**
+
 - Run `actions/checkout@v4` (with submodules if needed) before calling this action
 - Set `permissions: id-token: write, contents: read` on the job
 
 **Inputs**
 
-| Name | Required | Description |
-|------|----------|-------------|
-| `deployment-name` | yes | Name of the deployment. `-{environment}` is appended. Keep it short. |
-| `environment` | yes | Environment name e.g. `Development`, `Production` |
-| `github-action-client-id` | yes | Client ID of the GitHub Actions service principal |
-| `github-action-object-id` | yes | Object ID of the GitHub Actions service principal, passed to Bicep for role assignments |
-| `subscription-id` | yes | Azure Subscription ID |
-| `tenant-id` | yes | Azure Tenant ID |
-| `template-file` | no | Path to the main `.bicep` file. Defaults to `Deployments/Main.bicep`. |
-| `azure-region` | no | Azure region for the deployment. Defaults to `australiaeast`. |
+| Name                      | Required | Description                                                                             |
+| ------------------------- | -------- | --------------------------------------------------------------------------------------- |
+| `deployment-name`         | yes      | Name of the deployment. `-{environment}` is appended. Keep it short.                    |
+| `environment`             | yes      | Environment name e.g. `Development`, `Production`                                       |
+| `github-action-client-id` | yes      | Client ID of the GitHub Actions service principal                                       |
+| `github-action-object-id` | yes      | Object ID of the GitHub Actions service principal, passed to Bicep for role assignments |
+| `subscription-id`         | yes      | Azure Subscription ID                                                                   |
+| `tenant-id`               | yes      | Azure Tenant ID                                                                         |
+| `template-file`           | no       | Path to the main `.bicep` file. Defaults to `Deployments/Main.bicep`.                   |
+| `azure-region`            | no       | Azure region for the deployment. Defaults to `australiaeast`.                           |
 
 **Example**
 
@@ -119,15 +119,15 @@ If the download fails or returns an empty file (e.g. on a first deploy), a warni
 
 **Inputs**
 
-| Name | Required | Description |
-|------|----------|-------------|
-| `app-name` | yes | Full Azure Function App name, e.g. `shd-DataGateway-func` |
-| `resource-group` | yes | Azure resource group containing the Function App |
+| Name             | Required | Description                                               |
+| ---------------- | -------- | --------------------------------------------------------- |
+| `app-name`       | yes      | Full Azure Function App name, e.g. `shd-DataGateway-func` |
+| `resource-group` | yes      | Azure resource group containing the Function App          |
 
 **Outputs**
 
-| Name | Description |
-|------|-------------|
+| Name          | Description                                                                                                                                             |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `deploy-time` | UTC timestamp recorded before the download, e.g. `2024-01-15T10:30:00Z`. Pass this as `start-time` to `check-health` to exclude pre-deployment metrics. |
 
 ---
@@ -140,16 +140,16 @@ A `valueMax >= 1` indicates a healthy probe. If no data is returned after all at
 
 **Inputs**
 
-| Name | Required | Description |
-|------|----------|-------------|
-| `app-name` | yes | Full Azure Function App name |
-| `resource-group` | yes | Azure resource group. The App Insights resource name is derived by replacing `-rg` with `-appi` (e.g. `shd-prod-rg` → `shd-prod-appi`) |
-| `start-time` | yes | ISO8601 UTC timestamp. Only metric data after this time is considered, preventing pre-deployment readings from causing a false pass. Use the `deploy-time` output from `save`. |
+| Name             | Required | Description                                                                                                                                                                    |
+| ---------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `app-name`       | yes      | Full Azure Function App name                                                                                                                                                   |
+| `resource-group` | yes      | Azure resource group. The App Insights resource name is derived by replacing `-rg` with `-appi` (e.g. `shd-prod-rg` → `shd-prod-appi`)                                         |
+| `start-time`     | yes      | ISO8601 UTC timestamp. Only metric data after this time is considered, preventing pre-deployment readings from causing a false pass. Use the `deploy-time` output from `save`. |
 
 **Outputs**
 
-| Name | Description |
-|------|-------------|
+| Name      | Description       |
+| --------- | ----------------- |
 | `healthy` | `true` or `false` |
 
 ---
@@ -162,39 +162,40 @@ Fails if the Kudu API returns a status other than `200` or `202`.
 
 **Outputs**
 
-| Name | Description |
-|------|-------------|
+| Name            | Description                                                                                                       |
+| --------------- | ----------------------------------------------------------------------------------------------------------------- |
 | `rollback-time` | UTC timestamp recorded before the rollback deploy. Pass this as `start-time` to a subsequent `check-health` call. |
 
 **Inputs**
 
-| Name | Required | Description |
-|------|----------|-------------|
-| `app-name` | yes | Full Azure Function App name |
+| Name       | Required | Description                  |
+| ---------- | -------- | ---------------------------- |
+| `app-name` | yes      | Full Azure Function App name |
 
 ### `StottHoare/azure-functions-action/test-code@main`
 
 Builds a .NET project and optionally runs tests, publishing results via `dorny/test-reporter`.
 
 **Caller responsibilities:**
+
 - Run `actions/checkout@v4` (with submodules if needed) before calling this action
 - Set `permissions: id-token: write, packages: read, contents: read, checks: write` on the job
 - Set `environment:` on the job if required
 
 **Inputs**
 
-| Name | Required | Description |
-|------|----------|-------------|
-| `dotnet-version` | yes | .NET version e.g. `8.0`, `9.0`, `10.0` |
-| `dotnet-version` | yes | .NET version e.g. `8.0`, `9.0`, `10.0` |
-| `csproj-path` | yes | Relative path to the `.csproj` to build |
-| `environment` | yes | Environment name e.g. `Development`, `Production`. Passed to tests via `DOTNET_ENVIRONMENT` and `AZURE_FUNCTIONS_ENVIRONMENT`. |
-| `github-action-client-id` | yes | Client ID of the GitHub Actions service principal |
-| `subscription-id` | yes | Azure Subscription ID |
-| `tenant-id` | yes | Azure Tenant ID |
-| `packages-token` | yes | Token for authenticating to the GitHub Packages NuGet feed |
-| `app-configuration-connection-string` | yes | App Configuration connection string passed to tests via `APP_CONFIGURATION_CONNECTION_STRING` |
-| `cache` | no | Whether to cache NuGet packages in `setup-dotnet`. Defaults to `true`. |
+| Name                                  | Required | Description                                                                                                                    |
+| ------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `dotnet-version`                      | yes      | .NET version e.g. `8.0`, `9.0`, `10.0`                                                                                         |
+| `dotnet-version`                      | yes      | .NET version e.g. `8.0`, `9.0`, `10.0`                                                                                         |
+| `csproj-path`                         | yes      | Relative path to the `.csproj` to build                                                                                        |
+| `environment`                         | yes      | Environment name e.g. `Development`, `Production`. Passed to tests via `DOTNET_ENVIRONMENT` and `AZURE_FUNCTIONS_ENVIRONMENT`. |
+| `github-action-client-id`             | yes      | Client ID of the GitHub Actions service principal                                                                              |
+| `subscription-id`                     | yes      | Azure Subscription ID                                                                                                          |
+| `tenant-id`                           | yes      | Azure Tenant ID                                                                                                                |
+| `packages-token`                      | yes      | Token for authenticating to the GitHub Packages NuGet feed                                                                     |
+| `app-configuration-connection-string` | yes      | App Configuration connection string passed to tests via `APP_CONFIGURATION_CONNECTION_STRING`                                  |
+| `cache`                               | no       | Whether to cache NuGet packages in `setup-dotnet`. Defaults to `true`.                                                         |
 
 **Example**
 
@@ -233,23 +234,24 @@ jobs:
 The all-in-one action. Builds a .NET project, deploys it to a Function App, checks health, and rolls back automatically if the health check fails. Uses the `save`, `check-health`, and `rollback` actions internally.
 
 **Caller responsibilities:**
+
 - Run `actions/checkout@v4` (with submodules if needed) before calling this action
 - Set `permissions: id-token: write, packages: read, contents: read` on the job
 - Set `environment:` on the job if required
 
 **Inputs**
 
-| Name | Required | Description |
-|------|----------|-------------|
-| `function-name` | yes | Function resource name excluding environment prefix, e.g. `DataGateway-func` |
-| `dotnet-version` | yes | .NET version e.g. `8.0`, `9.0`, `10.0` |
-| `csproj-path` | yes | Relative path to the `.csproj` to build |
-| `packages-token` | yes | Token for authenticating to the GitHub Packages NuGet feed |
-| `github-action-client-id` | yes | Client ID of the GitHub Actions service principal |
-| `subscription-id` | yes | Azure Subscription ID |
-| `tenant-id` | yes | Azure Tenant ID |
-| `resource-prefix` | no | Resource prefix e.g. `shd` or `shp`. Derived from branch name if omitted (`main` → `shp`, else `shd`) |
-| `cache` | no | Whether to cache NuGet packages in `setup-dotnet`. Defaults to `true`. |
+| Name                      | Required | Description                                                                                           |
+| ------------------------- | -------- | ----------------------------------------------------------------------------------------------------- |
+| `function-name`           | yes      | Function resource name excluding environment prefix, e.g. `DataGateway-func`                          |
+| `dotnet-version`          | yes      | .NET version e.g. `8.0`, `9.0`, `10.0`                                                                |
+| `csproj-path`             | yes      | Relative path to the `.csproj` to build                                                               |
+| `packages-token`          | yes      | Token for authenticating to the GitHub Packages NuGet feed                                            |
+| `github-action-client-id` | yes      | Client ID of the GitHub Actions service principal                                                     |
+| `subscription-id`         | yes      | Azure Subscription ID                                                                                 |
+| `tenant-id`               | yes      | Azure Tenant ID                                                                                       |
+| `resource-prefix`         | no       | Resource prefix e.g. `shd` or `shp`. Derived from branch name if omitted (`main` → `shp`, else `shd`) |
+| `cache`                   | no       | Whether to cache NuGet packages in `setup-dotnet`. Defaults to `true`.                                |
 
 **Example**
 
@@ -350,9 +352,9 @@ jobs:
 
 `check-health` derives the Application Insights resource name from the resource group by replacing the `-rg` suffix with `-appi`:
 
-| Resource group | App Insights |
-|----------------|-------------|
-| `shd-prod-rg` | `shd-prod-appi` |
+| Resource group       | App Insights           |
+| -------------------- | ---------------------- |
+| `shd-prod-rg`        | `shd-prod-appi`        |
 | `shd-DataGateway-rg` | `shd-DataGateway-appi` |
 
 If your naming convention differs, raise an issue or open a PR to add an explicit `app-insights-name` input.
