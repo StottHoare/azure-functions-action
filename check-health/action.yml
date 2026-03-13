@@ -8,9 +8,6 @@ inputs:
   resource-group:
     description: Azure resource group name
     required: true
-  pre-deploy-instance-ids:
-    description: Comma-separated instance IDs captured before deployment (from save action)
-    required: true
 
 outputs:
   healthy:
@@ -26,7 +23,6 @@ runs:
       run: |
         APP_NAME="${{ inputs.app-name }}"
         RG="${{ inputs.resource-group }}"
-        PRE_IDS="${{ inputs.pre-deploy-instance-ids }}"
 
         echo "Waiting 10 seconds for function host restart..."
         sleep 10
@@ -34,55 +30,40 @@ runs:
         HEALTHY="false"
         MAX_ATTEMPTS=10
         RETRY_INTERVAL=30
+        SEEN_TRANSITIONAL=false
+        ALL_POLLS_READY=true
 
         for attempt in $(seq 1 $MAX_ATTEMPTS); do
           echo "Health check attempt $attempt of $MAX_ATTEMPTS..."
 
-          INSTANCE_DATA=$(az webapp list-instances \
+          STATES=$(az webapp list-instances \
             --name "$APP_NAME" \
             --resource-group "$RG" \
-            --query "[].join('|', [name, state])" -o tsv 2>/dev/null || echo "")
+            --query "[].state" -o tsv 2>/dev/null || echo "")
 
-          echo "Instances: '$INSTANCE_DATA'"
+          echo "Instance states: '$STATES'"
 
-          if [ -z "$INSTANCE_DATA" ]; then
+          if [ -z "$STATES" ]; then
             echo "No instances found yet."
+            ALL_POLLS_READY=false
           else
-            NEW_SEEN=false
-            ALL_NEW_READY=true
+            TRANSITIONAL=$(echo "$STATES" | grep -vE '^(READY|STOPPED)$' || true)
 
-            while IFS= read -r entry; do
-              [ -z "$entry" ] && continue
-              id="${entry%|*}"
-              state="${entry#*|}"
-
-              IS_NEW=true
-              for pre_id in $(echo "$PRE_IDS" | tr ',' '\n'); do
-                if [ "$id" = "$pre_id" ]; then
-                  IS_NEW=false
-                  break
-                fi
-              done
-
-              if [ "$IS_NEW" = "true" ]; then
-                NEW_SEEN=true
-                echo "New instance $id: $state"
-                if [ "$state" != "READY" ]; then
-                  ALL_NEW_READY=false
-                fi
-              else
-                echo "Old instance $id: $state (ignored)"
-              fi
-            done <<< "$INSTANCE_DATA"
-
-            if [ "$NEW_SEEN" = "false" ]; then
-              echo "No new instances yet — waiting..."
-            elif [ "$ALL_NEW_READY" = "true" ]; then
-              echo "All new instances are READY — healthy"
-              HEALTHY="true"
-              break
+            if [ -n "$TRANSITIONAL" ]; then
+              echo "Instances still transitioning: $TRANSITIONAL"
+              SEEN_TRANSITIONAL=true
+              ALL_POLLS_READY=false
+            elif echo "$STATES" | grep -q '^STOPPED$'; then
+              echo "One or more instances are STOPPED — unhealthy"
+              ALL_POLLS_READY=false
             else
-              echo "New instances found but not all READY — waiting..."
+              echo "All instances are READY"
+              if [ "$SEEN_TRANSITIONAL" = "true" ]; then
+                HEALTHY="true"
+                break
+              else
+                echo "Restart cycle not yet observed — may be stale, retrying..."
+              fi
             fi
           fi
 
@@ -91,6 +72,11 @@ runs:
             sleep $RETRY_INTERVAL
           fi
         done
+
+        if [ "$HEALTHY" = "false" ] && [ "$ALL_POLLS_READY" = "true" ]; then
+          echo "All instances consistently READY throughout — treating as healthy"
+          HEALTHY="true"
+        fi
 
         echo "healthy=$HEALTHY" >> "$GITHUB_OUTPUT"
         echo "Health check result: healthy=$HEALTHY"
