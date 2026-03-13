@@ -45,6 +45,7 @@ runs:
       with:
         dotnet-version: ${{ inputs.dotnet-version }}.x
         cache: ${{ inputs.cache }}
+        cache-dependency-path: '**/packages.lock.json'
 
     - name: Build project
       shell: bash
