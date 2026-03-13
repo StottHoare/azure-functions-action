@@ -5,40 +5,32 @@ description: >
 
 inputs:
   deployment-name:
-    type: string
+    required: true
     description: |
       Name of the deployment. -${environment} will be appended. Keep it short.
-    required: true
   template-file:
-    type: string
-    description: Path to the main .bicep template file
     required: false
     default: Deployments/Main.bicep
+    description: Path to the main .bicep template file
   github-action-client-id:
-    type: string
+    required: true
     description: Client ID of the GitHub Actions service principal used to authenticate to Azure
-    required: true
   github-action-object-id:
-    type: string
+    required: true
     description: Object ID of the GitHub Actions service principal, passed to Bicep for role assignments
-    required: true
   subscription-id:
-    type: string
+    required: true
     description: Azure Subscription ID
-    required: true
   tenant-id:
-    type: string
-    description: Azure Tenant ID
     required: true
+    description: Azure Tenant ID
   azure-region:
-    type: string
-    description: Azure region for the deployment
     required: false
     default: australiaeast
+    description: Azure region for the deployment
   environment:
-    type: string
-    description: Environment name (e.g. Development | Production)
     required: true
+    description: Environment name (e.g. Development | Production)
 
 runs:
   using: composite
