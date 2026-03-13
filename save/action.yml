@@ -1,0 +1,55 @@
+name: Save Current Deployment
+description: Downloads the current deployed wwwroot as previous.zip for potential rollback, and records the deploy time.
+
+inputs:
+  app-name:
+    description: Full Azure Function App name e.g. shd-DataGateway-func
+    required: true
+  resource-group:
+    description: Azure resource group name
+    required: true
+
+outputs:
+  deploy-time:
+    description: UTC timestamp recorded before the download in %Y-%m-%dT%H:%M:%SZ format
+    value: ${{ steps.record-time.outputs.deploy-time }}
+
+runs:
+  using: composite
+  steps:
+    - name: Record deploy time
+      id: record-time
+      shell: bash
+      run: |
+        DEPLOY_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        echo "deploy-time=$DEPLOY_TIME" >> "$GITHUB_OUTPUT"
+        echo "Deploy time recorded: $DEPLOY_TIME"
+
+    - name: Get Azure bearer token
+      id: get-token
+      shell: bash
+      run: |
+        TOKEN=$(az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)
+        echo "::add-mask::$TOKEN"
+        echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+    - name: Download current wwwroot as previous.zip
+      shell: bash
+      run: |
+        APP_NAME="${{ inputs.app-name }}"
+        TOKEN="${{ steps.get-token.outputs.token }}"
+        URL="https://${APP_NAME}.scm.azurewebsites.net/api/zip/site/wwwroot/"
+
+        HTTP_STATUS=$(curl -s -o previous.zip -w "%{http_code}" \
+          -H "Authorization: Bearer $TOKEN" \
+          "$URL")
+
+        echo "HTTP status: $HTTP_STATUS"
+
+        if [ "$HTTP_STATUS" != "200" ]; then
+          echo "::warning::Failed to download current deployment (HTTP $HTTP_STATUS) — this may be a first deploy. Rollback will not be available."
+        elif [ ! -s previous.zip ]; then
+          echo "::warning::Downloaded previous.zip is empty — this may be a first deploy. Rollback will not be available."
+        else
+          echo "Successfully saved current deployment to previous.zip"
+        fi

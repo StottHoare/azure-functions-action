@@ -1,0 +1,59 @@
+name: Rollback Azure Function Deployment
+description: Re-deploys the previously saved previous.zip to the function app via Kudu zip deploy.
+
+inputs:
+  app-name:
+    description: Full Azure Function App name e.g. shd-DataGateway-func
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Check previous.zip exists
+      shell: bash
+      run: |
+        if [ ! -f previous.zip ] || [ ! -s previous.zip ]; then
+          echo "No previous deployment saved — skipping rollback"
+          exit 0
+        fi
+        echo "previous.zip found, proceeding with rollback"
+
+    - name: Get Azure bearer token
+      id: get-token
+      shell: bash
+      run: |
+        if [ ! -f previous.zip ] || [ ! -s previous.zip ]; then
+          exit 0
+        fi
+        TOKEN=$(az account get-access-token --resource https://management.azure.com --query accessToken -o tsv)
+        echo "::add-mask::$TOKEN"
+        echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+    - name: Deploy previous.zip via Kudu
+      shell: bash
+      run: |
+        if [ ! -f previous.zip ] || [ ! -s previous.zip ]; then
+          exit 0
+        fi
+
+        APP_NAME="${{ inputs.app-name }}"
+        TOKEN="${{ steps.get-token.outputs.token }}"
+        URL="https://${APP_NAME}.scm.azurewebsites.net/api/zipdeploy?isAsync=false"
+
+        echo "Rolling back $APP_NAME..."
+
+        HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+          -X POST \
+          -H "Authorization: Bearer $TOKEN" \
+          -H "Content-Type: application/zip" \
+          --data-binary @previous.zip \
+          "$URL")
+
+        echo "HTTP status: $HTTP_STATUS"
+
+        if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "202" ]; then
+          echo "::error::Rollback failed with HTTP status $HTTP_STATUS"
+          exit 1
+        fi
+
+        echo "Rollback deployed successfully (HTTP $HTTP_STATUS)"

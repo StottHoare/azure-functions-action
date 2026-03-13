@@ -1,0 +1,82 @@
+name: Check Azure Functions Health
+description: Queries the Azure Functions runtime health check custom metric in Application Insights and reports whether the function is healthy.
+
+inputs:
+  app-name:
+    description: Full Azure Function App name
+    required: true
+  resource-group:
+    description: Azure resource group name
+    required: true
+  start-time:
+    description: ISO8601 UTC timestamp. Only metric data after this time is considered.
+    required: true
+
+outputs:
+  healthy:
+    description: true if the function app is healthy, false otherwise
+    value: ${{ steps.health-check.outputs.healthy }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check health via Application Insights
+      id: health-check
+      shell: bash
+      run: |
+        APP_NAME="${{ inputs.app-name }}"
+        RG="${{ inputs.resource-group }}"
+        START_TIME="${{ inputs.start-time }}"
+
+        # Derive App Insights name from resource group: replace -rg with -appi
+        APPI="${RG/-rg/-appi}"
+        echo "Using App Insights resource: $APPI"
+
+        echo "Waiting 10 seconds for function host restart..."
+        sleep 10
+
+        HEALTHY="false"
+        MAX_ATTEMPTS=6
+        RETRY_INTERVAL=30
+
+        for attempt in $(seq 1 $MAX_ATTEMPTS); do
+          echo "Health check attempt $attempt of $MAX_ATTEMPTS..."
+
+          QUERY="customMetrics | where name == 'azure.functions.health_check.reports' | where timestamp > datetime('${START_TIME}') | order by timestamp desc | take 1 | project valueMax"
+
+          RESULT=$(az monitor app-insights query \
+            --app "$APPI" \
+            --resource-group "$RG" \
+            --analytics-query "$QUERY" \
+            --query "tables[0].rows[0][0]" \
+            -o tsv 2>/dev/null || echo "")
+
+          echo "Query result: '$RESULT'"
+
+          if [ -z "$RESULT" ] || [ "$RESULT" = "None" ] || [ "$RESULT" = "null" ]; then
+            echo "No health check data yet."
+          else
+            # valueMax >= 1 means healthy
+            if awk "BEGIN { exit !($RESULT >= 1) }"; then
+              echo "Function is healthy (valueMax=$RESULT)"
+              HEALTHY="true"
+              break
+            else
+              echo "Function is unhealthy (valueMax=$RESULT)"
+              HEALTHY="false"
+              break
+            fi
+          fi
+
+          if [ "$attempt" -lt "$MAX_ATTEMPTS" ]; then
+            echo "Retrying in ${RETRY_INTERVAL}s..."
+            sleep $RETRY_INTERVAL
+          fi
+        done
+
+        if [ "$HEALTHY" = "false" ] && [ -z "$RESULT" ]; then
+          echo "No health check data received after $MAX_ATTEMPTS attempts."
+        fi
+
+        echo "healthy=$HEALTHY" >> "$GITHUB_OUTPUT"
+        echo "Health check result: healthy=$HEALTHY"
