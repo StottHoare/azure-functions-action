@@ -1,0 +1,127 @@
+name: Deploy Azure Function Code
+description: >
+  Builds and deploys a .NET Azure Function App with health check and automatic rollback.
+  Caller must have already run actions/checkout@v4 before calling this action.
+
+inputs:
+  function-name:
+    required: true
+    description: |
+      Name of the function resource.
+      Exclude any environment specific resource prefix like `shd`/`shp`
+  dotnet-version:
+    required: true
+    description: '`8.0` | `9.0` | `10.0`'
+  csproj-path:
+    required: true
+    description: Relative path to .csproj to be built
+  packages-token:
+    required: true
+    description: Token for authenticating to the GitHub Packages NuGet feed
+  github-action-client-id:
+    required: true
+    description: Client ID of the GitHub Actions service principal used to authenticate to Azure
+  subscription-id:
+    required: true
+    description: Azure Subscription ID
+  tenant-id:
+    required: true
+    description: Azure Tenant ID
+  resource-prefix:
+    required: false
+    description: Resource prefix (e.g. shd | shp). Derived from branch name if not set (main=shp, else shd)
+
+runs:
+  using: composite
+  steps:
+    - name: Add nuget.config
+      shell: bash
+      run: cp ServiceDeployment/nuget.config .
+
+    - name: Setup .NET ${{ inputs.dotnet-version }}
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ inputs.dotnet-version }}.x
+        cache: true
+
+    - name: Build project
+      shell: bash
+      run: dotnet build "${{ inputs.csproj-path }}" --configuration Release --output ./output
+      env:
+        NUGET_AUTH_TOKEN: ${{ inputs.packages-token }}
+
+    - name: Get resource prefix
+      id: get-resource-prefix
+      shell: pwsh
+      run: |
+        $ResourcePrefix = "${{ inputs.resource-prefix }}"
+        if (-not $ResourcePrefix) {
+          $Branch = "${{ github.ref_name }}"
+          $ResourcePrefix = if ($Branch -eq 'main') { "shp" } else { "shd" }
+        }
+        Write-Host "resourcePrefix=$ResourcePrefix"
+        "resourcePrefix=$ResourcePrefix" >> $env:GITHUB_OUTPUT
+
+    - name: Azure login
+      uses: azure/login@v2
+      with:
+        client-id: ${{ inputs.github-action-client-id }}
+        tenant-id: ${{ inputs.tenant-id }}
+        subscription-id: ${{ inputs.subscription-id }}
+
+    - name: Resolve app name and resource group
+      id: resolve
+      shell: bash
+      run: |
+        APP="${{ steps.get-resource-prefix.outputs.resourcePrefix }}-${{ inputs.function-name }}"
+        RG=$(az functionapp list --query "[?name=='$APP'].resourceGroup" -o tsv)
+        echo "appName=$APP" >> $GITHUB_OUTPUT
+        echo "resourceGroup=$RG" >> $GITHUB_OUTPUT
+
+    - name: Save current deployment
+      id: save
+      uses: StottHoare/azure-functions-action/save@main
+      with:
+        app-name: ${{ steps.resolve.outputs.appName }}
+        resource-group: ${{ steps.resolve.outputs.resourceGroup }}
+
+    - name: Deploy Azure Function Code
+      uses: Azure/functions-action@v1
+      with:
+        app-name: ${{ steps.resolve.outputs.appName }}
+        package: './output'
+
+    - name: Health Check
+      id: health-check
+      uses: StottHoare/azure-functions-action/check-health@main
+      with:
+        app-name: ${{ steps.resolve.outputs.appName }}
+        resource-group: ${{ steps.resolve.outputs.resourceGroup }}
+        start-time: ${{ steps.save.outputs.deploy-time }}
+
+    - name: Rollback
+      id: rollback
+      if: steps.health-check.outputs.healthy != 'true'
+      uses: StottHoare/azure-functions-action/rollback@main
+      with:
+        app-name: ${{ steps.resolve.outputs.appName }}
+
+    - name: Health Check (post-rollback)
+      id: health-check-post-rollback
+      if: steps.health-check.outputs.healthy != 'true'
+      uses: StottHoare/azure-functions-action/check-health@main
+      with:
+        app-name: ${{ steps.resolve.outputs.appName }}
+        resource-group: ${{ steps.resolve.outputs.resourceGroup }}
+        start-time: ${{ steps.rollback.outputs.rollback-time }}
+
+    - name: Fail deployment
+      if: steps.health-check.outputs.healthy != 'true'
+      shell: bash
+      run: |
+        if [ "${{ steps.health-check-post-rollback.outputs.healthy }}" = "true" ]; then
+          echo "Deployment was unhealthy — rolled back to previous version successfully"
+        else
+          echo "Deployment was unhealthy and rollback also failed — manual intervention required"
+        fi
+        exit 1

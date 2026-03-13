@@ -1,8 +1,8 @@
 # azure-functions-action
 
-Composite GitHub Actions for Azure Function App deployment lifecycle: save the current deployment, check health via Application Insights, and roll back if needed.
+Composite GitHub Actions for Azure Function App deployment lifecycle: build and deploy a .NET function app, check health via Application Insights, and roll back automatically if needed.
 
-> **Prerequisite:** All actions require a prior `azure/login@v2` step in your workflow. Basic auth must be disabled on the Function App — these actions authenticate via Azure AD bearer token.
+> **Prerequisite:** Basic auth must be disabled on the Function App — these actions authenticate via Azure AD bearer token. The `save`, `check-health`, and `rollback` actions require a prior `azure/login@v2` step; `deploy-code` handles login internally.
 
 ---
 
@@ -69,9 +69,59 @@ Fails if the Kudu API returns a status other than `200` or `202`.
 |------|----------|-------------|
 | `app-name` | yes | Full Azure Function App name |
 
+### `StottHoare/azure-functions-action/deploy-code@main`
+
+The all-in-one action. Builds a .NET project, deploys it to a Function App, checks health, and rolls back automatically if the health check fails. Uses the `save`, `check-health`, and `rollback` actions internally.
+
+**Caller responsibilities:**
+- Run `actions/checkout@v4` (with submodules if needed) before calling this action
+- Set `permissions: id-token: write, packages: read, contents: read` on the job
+- Set `environment:` on the job if required
+
+**Inputs**
+
+| Name | Required | Description |
+|------|----------|-------------|
+| `function-name` | yes | Function resource name excluding environment prefix, e.g. `DataGateway-func` |
+| `dotnet-version` | yes | .NET version e.g. `8.0`, `9.0`, `10.0` |
+| `csproj-path` | yes | Relative path to the `.csproj` to build |
+| `packages-token` | yes | Token for authenticating to the GitHub Packages NuGet feed |
+| `github-action-client-id` | yes | Client ID of the GitHub Actions service principal |
+| `subscription-id` | yes | Azure Subscription ID |
+| `tenant-id` | yes | Azure Tenant ID |
+| `resource-prefix` | no | Resource prefix e.g. `shd` or `shp`. Derived from branch name if omitted (`main` → `shp`, else `shd`) |
+
+**Example**
+
+```yaml
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: Production
+    permissions:
+      id-token: write
+      packages: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          token: ${{ secrets.SUBMODULES_TOKEN }}
+
+      - uses: StottHoare/azure-functions-action/deploy-code@main
+        with:
+          function-name: DataGateway-func
+          dotnet-version: '8.0'
+          csproj-path: src/DataGateway/DataGateway.csproj
+          packages-token: ${{ secrets.PACKAGES_TOKEN }}
+          github-action-client-id: ${{ vars.AZURE_APPREG_GITHUBACTIONS_CLIENT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+```
+
 ---
 
-## Usage
+## Usage (individual actions)
 
 The typical pattern is: save → deploy → check health → rollback if unhealthy.
 
