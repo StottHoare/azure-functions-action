@@ -8,6 +8,55 @@ Composite GitHub Actions for Azure Function App deployment lifecycle: build and 
 
 ## Actions
 
+### `StottHoare/azure-functions-action/test-bicep@main`
+
+Runs a what-if deployment for a Bicep template at subscription scope. Useful in PR workflows to preview infrastructure changes before merging.
+
+**Caller responsibilities:**
+- Run `actions/checkout@v4` (with submodules if needed) before calling this action
+- Set `permissions: id-token: write, contents: read` on the job
+
+**Inputs**
+
+| Name | Required | Description |
+|------|----------|-------------|
+| `deployment-name` | yes | Name of the deployment. `-{environment}` is appended. Keep it short. |
+| `environment` | yes | Environment name e.g. `Development`, `Production` |
+| `github-action-client-id` | yes | Client ID of the GitHub Actions service principal |
+| `github-action-object-id` | yes | Object ID of the GitHub Actions service principal, passed to Bicep for role assignments |
+| `subscription-id` | yes | Azure Subscription ID |
+| `tenant-id` | yes | Azure Tenant ID |
+| `template-file` | no | Path to the main `.bicep` file. Defaults to `Deployments/Main.bicep`. |
+| `azure-region` | no | Azure region for the deployment. Defaults to `australiaeast`. |
+
+**Example**
+
+```yaml
+jobs:
+  whatif:
+    runs-on: ubuntu-latest
+    environment: Development
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          token: ${{ secrets.SUBMODULES_TOKEN }}
+
+      - uses: StottHoare/azure-functions-action/test-bicep@main
+        with:
+          deployment-name: DataGateway
+          environment: Development
+          github-action-client-id: ${{ vars.AZURE_APPREG_GITHUBACTIONS_CLIENT_ID }}
+          github-action-object-id: ${{ vars.AZURE_APPREG_GITHUBACTIONS_OBJECT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+```
+
+---
+
 ### `StottHoare/azure-functions-action/save@main`
 
 Downloads the current deployed `wwwroot` as `previous.zip` for potential rollback, and records the time of the save as `deploy-time`.

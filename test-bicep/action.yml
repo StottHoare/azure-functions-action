@@ -1,0 +1,70 @@
+name: Bicep What-if Deployment
+description: >
+  Runs a what-if deployment for a Bicep template at subscription scope.
+  Caller must have already run actions/checkout@v4 before calling this action.
+
+inputs:
+  deployment-name:
+    type: string
+    description: |
+      Name of the deployment. -${environment} will be appended. Keep it short.
+    required: true
+  template-file:
+    type: string
+    description: Path to the main .bicep template file
+    required: false
+    default: Deployments/Main.bicep
+  github-action-client-id:
+    type: string
+    description: Client ID of the GitHub Actions service principal used to authenticate to Azure
+    required: true
+  github-action-object-id:
+    type: string
+    description: Object ID of the GitHub Actions service principal, passed to Bicep for role assignments
+    required: true
+  subscription-id:
+    type: string
+    description: Azure Subscription ID
+    required: true
+  tenant-id:
+    type: string
+    description: Azure Tenant ID
+    required: true
+  azure-region:
+    type: string
+    description: Azure region for the deployment
+    required: false
+    default: australiaeast
+  environment:
+    type: string
+    description: Environment name (e.g. Development | Production)
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Azure login
+      uses: azure/login@v2
+      with:
+        client-id: ${{ inputs.github-action-client-id }}
+        tenant-id: ${{ inputs.tenant-id }}
+        subscription-id: ${{ inputs.subscription-id }}
+
+    - name: What-if deployment
+      uses: azure/bicep-deploy@v2
+      with:
+        type: deployment
+        operation: whatIf
+        name: ${{ inputs.deployment-name }}-${{ inputs.environment }}
+        location: ${{ inputs.azure-region }}
+        scope: subscription
+        subscription-id: ${{ inputs.subscription-id }}
+        template-file: ${{ inputs.template-file }}
+        parameters: >
+          {
+            "environment": "${{ inputs.environment }}",
+            "location": "${{ inputs.azure-region }}",
+            "githubActionsAppRegistrationObjectId": "${{ inputs.github-action-object-id }}",
+            "githubRepoUrl": "${{ github.server_url }}/${{ github.repository }}",
+            "githubBranch": "${{ github.ref_name }}"
+          }
