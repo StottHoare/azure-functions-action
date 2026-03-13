@@ -30,6 +30,10 @@ inputs:
   resource-prefix:
     required: false
     description: Resource prefix (e.g. shd | shp). Derived from branch name if not set (main=shp, else shd)
+  cache:
+    required: false
+    default: 'true'
+    description: Whether to cache NuGet packages in setup-dotnet
 
 runs:
   using: composite
@@ -42,7 +46,7 @@ runs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ inputs.dotnet-version }}.x
-        cache: true
+        cache: ${{ inputs.cache }}
 
     - name: Build project
       shell: bash
