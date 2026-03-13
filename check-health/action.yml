@@ -24,8 +24,8 @@ runs:
         APP_NAME="${{ inputs.app-name }}"
         RG="${{ inputs.resource-group }}"
 
-        echo "Waiting 30 seconds for function host restart..."
-        sleep 30
+        echo "Waiting 60 seconds for function host restart..."
+        sleep 60
 
         # Fast path: direct HTTP health check (no redirect follow — a 3xx means EasyAuth is enabled)
         HEALTH_URL="https://${APP_NAME}.azurewebsites.net/"
@@ -41,7 +41,9 @@ runs:
         elif [[ "$HTTP_STATUS" =~ ^3 ]]; then
           echo "HTTP health check redirected ($HTTP_STATUS) — authentication enabled, falling back to instance state polling"
         else
-          echo "HTTP health check returned $HTTP_STATUS — falling back to instance state polling"
+          echo "HTTP health check returned $HTTP_STATUS — unhealthy"
+          echo "healthy=false" >> "$GITHUB_OUTPUT"
+          exit 0
         fi
 
         HEALTHY="false"
