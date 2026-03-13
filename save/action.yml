@@ -1,5 +1,5 @@
 name: Save Current Deployment
-description: Downloads the current deployed wwwroot as previous.zip for potential rollback, and records the deploy time.
+description: Downloads the current deployed wwwroot as previous.zip for potential rollback, and snapshots instance states.
 
 inputs:
   app-name:
@@ -10,20 +10,25 @@ inputs:
     required: true
 
 outputs:
-  deploy-time:
-    description: UTC timestamp recorded before the download in %Y-%m-%dT%H:%M:%SZ format
-    value: ${{ steps.record-time.outputs.deploy-time }}
+  pre-deploy-states:
+    description: Newline-separated instance states captured before deployment
+    value: ${{ steps.snapshot.outputs.pre-deploy-states }}
 
 runs:
   using: composite
   steps:
-    - name: Record deploy time
-      id: record-time
+    - name: Snapshot instance states
+      id: snapshot
       shell: bash
       run: |
-        DEPLOY_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-        echo "deploy-time=$DEPLOY_TIME" >> "$GITHUB_OUTPUT"
-        echo "Deploy time recorded: $DEPLOY_TIME"
+        STATES=$(az webapp list-instances \
+          --name "${{ inputs.app-name }}" \
+          --resource-group "${{ inputs.resource-group }}" \
+          --query "[].state" -o tsv 2>/dev/null || echo "")
+        echo "Pre-deploy instance states: '$STATES'"
+        # Store as comma-separated for safe output encoding
+        STATES_CSV=$(echo "$STATES" | tr '\n' ',' | sed 's/,$//')
+        echo "pre-deploy-states=$STATES_CSV" >> "$GITHUB_OUTPUT"
 
     - name: Get Azure bearer token
       id: get-token
