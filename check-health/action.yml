@@ -36,10 +36,12 @@ runs:
           echo "HTTP health check passed — healthy"
           echo "healthy=true" >> "$GITHUB_OUTPUT"
           exit 0
+        elif [ "$HTTP_STATUS" = "000" ]; then
+          echo "HTTP health check unreachable — function app may be on a private network, falling back to instance state polling"
         elif [[ "$HTTP_STATUS" =~ ^3 ]]; then
           echo "HTTP health check redirected ($HTTP_STATUS) — authentication enabled, falling back to instance state polling"
         else
-          echo "HTTP health check failed ($HTTP_STATUS) — falling back to instance state polling"
+          echo "HTTP health check returned $HTTP_STATUS — falling back to instance state polling"
         fi
 
         HEALTHY="false"
