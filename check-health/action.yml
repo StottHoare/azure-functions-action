@@ -34,7 +34,6 @@ runs:
         HEALTHY="false"
         MAX_ATTEMPTS=10
         RETRY_INTERVAL=30
-        ALL_POLLS_READY=true
 
         for attempt in $(seq 1 $MAX_ATTEMPTS); do
           echo "Health check attempt $attempt of $MAX_ATTEMPTS..."
@@ -48,7 +47,6 @@ runs:
 
           if [ -z "$INSTANCE_DATA" ]; then
             echo "No instances found yet."
-            ALL_POLLS_READY=false
           else
             NEW_SEEN=false
             ALL_NEW_READY=true
@@ -79,14 +77,12 @@ runs:
 
             if [ "$NEW_SEEN" = "false" ]; then
               echo "No new instances yet — waiting..."
-              ALL_POLLS_READY=false
             elif [ "$ALL_NEW_READY" = "true" ]; then
               echo "All new instances are READY — healthy"
               HEALTHY="true"
               break
             else
               echo "New instances found but not all READY — waiting..."
-              ALL_POLLS_READY=false
             fi
           fi
 
@@ -95,11 +91,6 @@ runs:
             sleep $RETRY_INTERVAL
           fi
         done
-
-        if [ "$HEALTHY" = "false" ] && [ "$ALL_POLLS_READY" = "true" ]; then
-          echo "All instances consistently READY throughout — treating as healthy"
-          HEALTHY="true"
-        fi
 
         echo "healthy=$HEALTHY" >> "$GITHUB_OUTPUT"
         echo "Health check result: healthy=$HEALTHY"

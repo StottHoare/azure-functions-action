@@ -154,6 +154,18 @@ runs:
           echo "Log download unavailable or empty"
         fi
 
+    - name: Snapshot instance IDs before rollback
+      id: pre-rollback-snapshot
+      if: steps.health-check.outputs.healthy != 'true' && steps.eval-rollback.outputs.should-rollback == 'true'
+      shell: bash
+      run: |
+        INSTANCE_IDS=$(az webapp list-instances \
+          --name "${{ steps.resolve.outputs.appName }}" \
+          --resource-group "${{ steps.resolve.outputs.resourceGroup }}" \
+          --query "[].name" -o tsv 2>/dev/null || echo "")
+        IDS_CSV=$(echo "$INSTANCE_IDS" | tr '\n' ',' | sed 's/,$//')
+        echo "instance-ids=$IDS_CSV" >> "$GITHUB_OUTPUT"
+
     - name: Rollback
       id: rollback
       if: steps.health-check.outputs.healthy != 'true' && steps.eval-rollback.outputs.should-rollback == 'true'
@@ -168,6 +180,7 @@ runs:
       with:
         app-name: ${{ steps.resolve.outputs.appName }}
         resource-group: ${{ steps.resolve.outputs.resourceGroup }}
+        pre-deploy-instance-ids: ${{ steps.pre-rollback-snapshot.outputs.instance-ids }}
 
     - name: Fail deployment
       if: steps.health-check.outputs.healthy != 'true'
