@@ -28,8 +28,10 @@ runs:
         sleep 10
 
         HEALTHY="false"
-        MAX_ATTEMPTS=6
+        MAX_ATTEMPTS=10
         RETRY_INTERVAL=30
+        SEEN_TRANSITIONAL=false
+        ALL_POLLS_READY=true
 
         for attempt in $(seq 1 $MAX_ATTEMPTS); do
           echo "Health check attempt $attempt of $MAX_ATTEMPTS..."
@@ -43,19 +45,25 @@ runs:
 
           if [ -z "$STATES" ]; then
             echo "No instances found yet."
+            ALL_POLLS_READY=false
           else
             TRANSITIONAL=$(echo "$STATES" | grep -vE '^(READY|STOPPED)$' || true)
 
             if [ -n "$TRANSITIONAL" ]; then
               echo "Instances still transitioning: $TRANSITIONAL"
+              SEEN_TRANSITIONAL=true
+              ALL_POLLS_READY=false
             elif echo "$STATES" | grep -q '^STOPPED$'; then
               echo "One or more instances are STOPPED — unhealthy"
               HEALTHY="false"
+              ALL_POLLS_READY=false
               break
-            else
+            elif [ "$SEEN_TRANSITIONAL" = "true" ]; then
               echo "All instances are READY — healthy"
               HEALTHY="true"
               break
+            else
+              echo "All instances READY but restart cycle not yet observed — may be stale, retrying..."
             fi
           fi
 
@@ -64,6 +72,11 @@ runs:
             sleep $RETRY_INTERVAL
           fi
         done
+
+        if [ "$HEALTHY" = "false" ] && [ "$ALL_POLLS_READY" = "true" ]; then
+          echo "All instances consistently READY throughout — treating as healthy"
+          HEALTHY="true"
+        fi
 
         echo "healthy=$HEALTHY" >> "$GITHUB_OUTPUT"
         echo "Health check result: healthy=$HEALTHY"
