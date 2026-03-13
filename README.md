@@ -69,6 +69,63 @@ Fails if the Kudu API returns a status other than `200` or `202`.
 |------|----------|-------------|
 | `app-name` | yes | Full Azure Function App name |
 
+### `StottHoare/azure-functions-action/test-code@main`
+
+Builds a .NET project and optionally runs tests, publishing results via `dorny/test-reporter`.
+
+**Caller responsibilities:**
+- Run `actions/checkout@v4` (with submodules if needed) before calling this action
+- Set `permissions: id-token: write, packages: read, contents: read, checks: write` on the job
+- Set `environment:` on the job if required
+
+**Inputs**
+
+| Name | Required | Description |
+|------|----------|-------------|
+| `dotnet-version` | yes | .NET version e.g. `8.0`, `9.0`, `10.0` |
+| `run-tests` | yes | Whether to run tests (`'true'` or `'false'`) |
+| `csproj-path` | yes | Relative path to the `.csproj` to build |
+| `environment` | yes | Environment name e.g. `Development`, `Production`. Passed to tests via `DOTNET_ENVIRONMENT` and `AZURE_FUNCTIONS_ENVIRONMENT`. |
+| `github-action-client-id` | yes | Client ID of the GitHub Actions service principal |
+| `subscription-id` | yes | Azure Subscription ID |
+| `tenant-id` | yes | Azure Tenant ID |
+| `packages-token` | yes | Token for authenticating to the GitHub Packages NuGet feed |
+| `app-configuration-connection-string` | yes | App Configuration connection string passed to tests |
+| `cache` | no | Whether to cache NuGet packages in `setup-dotnet`. Defaults to `true`. |
+
+**Example**
+
+```yaml
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    environment: Development
+    permissions:
+      id-token: write
+      packages: read
+      contents: read
+      checks: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          token: ${{ secrets.SUBMODULES_TOKEN }}
+
+      - uses: StottHoare/azure-functions-action/test-code@main
+        with:
+          dotnet-version: '8.0'
+          run-tests: 'true'
+          csproj-path: src/DataGateway/DataGateway.Tests.csproj
+          environment: Development
+          github-action-client-id: ${{ vars.AZURE_APPREG_GITHUBACTIONS_CLIENT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          packages-token: ${{ secrets.PACKAGES_TOKEN }}
+          app-configuration-connection-string: ${{ secrets.APP_CONFIGURATION_CONNECTION_STRING }}
+```
+
+---
+
 ### `StottHoare/azure-functions-action/deploy-code@main`
 
 The all-in-one action. Builds a .NET project, deploys it to a Function App, checks health, and rolls back automatically if the health check fails. Uses the `save`, `check-health`, and `rollback` actions internally.

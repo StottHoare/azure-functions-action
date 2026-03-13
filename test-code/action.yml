@@ -1,0 +1,81 @@
+name: Test Azure Function Code
+description: >
+  Builds and tests a .NET Azure Function App.
+  Caller must have already run actions/checkout@v4 before calling this action.
+
+inputs:
+  dotnet-version:
+    required: true
+    description: '`8.0` | `9.0` | `10.0`'
+  run-tests:
+    required: true
+    description: Whether to run tests
+  csproj-path:
+    required: true
+    description: Relative path to .csproj to be built
+  environment:
+    required: true
+    description: Environment name (e.g. Development | Production)
+  github-action-client-id:
+    required: true
+    description: Client ID of the GitHub Actions service principal used to authenticate to Azure
+  subscription-id:
+    required: true
+    description: Azure Subscription ID
+  tenant-id:
+    required: true
+    description: Azure Tenant ID
+  packages-token:
+    required: true
+    description: Token for authenticating to the GitHub Packages NuGet feed
+  app-configuration-connection-string:
+    required: true
+    description: App Configuration connection string, passed to tests via environment variable
+  cache:
+    required: false
+    default: 'true'
+    description: Whether to cache NuGet packages in setup-dotnet
+
+runs:
+  using: composite
+  steps:
+    - name: Add nuget.config
+      shell: bash
+      run: cp ServiceDeployment/nuget.config .
+
+    - name: Setup .NET ${{ inputs.dotnet-version }}
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ inputs.dotnet-version }}.x
+        cache: ${{ inputs.cache }}
+
+    - name: Build project
+      shell: bash
+      run: dotnet build "${{ inputs.csproj-path }}" --configuration Release
+      env:
+        NUGET_AUTH_TOKEN: ${{ inputs.packages-token }}
+
+    - name: Azure login
+      uses: azure/login@v2
+      with:
+        client-id: ${{ inputs.github-action-client-id }}
+        tenant-id: ${{ inputs.tenant-id }}
+        subscription-id: ${{ inputs.subscription-id }}
+
+    - name: Run tests
+      if: ${{ inputs.run-tests == 'true' }}
+      shell: bash
+      run: dotnet test "${{ inputs.csproj-path }}" --configuration Release --no-build --logger "trx;LogFileName=test-results.trx"
+      env:
+        DOTNET_ENVIRONMENT: ${{ inputs.environment }}
+        AZURE_FUNCTIONS_ENVIRONMENT: ${{ inputs.environment }}
+        APP_CONFIGURATION_CONNECTION_STRING: ${{ inputs.app-configuration-connection-string }}
+        NUGET_AUTH_TOKEN: ${{ inputs.packages-token }}
+
+    - name: Publish test results
+      if: ${{ inputs.run-tests == 'true' }}
+      uses: dorny/test-reporter@v1
+      with:
+        name: Test Results (${{ inputs.environment }})
+        path: '**/test-results.trx'
+        reporter: dotnet-trx
