@@ -83,13 +83,6 @@ runs:
         echo "appName=$APP" >> "$GITHUB_OUTPUT"
         echo "resourceGroup=$RG" >> "$GITHUB_OUTPUT"
 
-    - name: Save current deployment
-      id: save
-      uses: StottHoare/azure-functions-action/save@main
-      with:
-        app-name: ${{ steps.resolve.outputs.appName }}
-        resource-group: ${{ steps.resolve.outputs.resourceGroup }}
-
     - name: Deploy Azure Function Code
       uses: Azure/functions-action@v1
       with:
@@ -102,7 +95,6 @@ runs:
       with:
         app-name: ${{ steps.resolve.outputs.appName }}
         resource-group: ${{ steps.resolve.outputs.resourceGroup }}
-        start-time: ${{ steps.save.outputs.deploy-time }}
 
     - name: Rollback
       id: rollback
@@ -118,7 +110,6 @@ runs:
       with:
         app-name: ${{ steps.resolve.outputs.appName }}
         resource-group: ${{ steps.resolve.outputs.resourceGroup }}
-        start-time: ${{ steps.rollback.outputs.rollback-time }}
 
     - name: Fail deployment
       if: steps.health-check.outputs.healthy != 'true'
