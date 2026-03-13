@@ -24,8 +24,21 @@ runs:
         APP_NAME="${{ inputs.app-name }}"
         RG="${{ inputs.resource-group }}"
 
-        echo "Waiting 10 seconds for function host restart..."
-        sleep 10
+        echo "Waiting 30 seconds for function host restart..."
+        sleep 30
+
+        # Fast path: direct HTTP health check
+        HEALTH_URL="https://${APP_NAME}.azurewebsites.net/"
+        HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$HEALTH_URL" || echo "000")
+        echo "HTTP health check status: $HTTP_STATUS"
+
+        if [ "$HTTP_STATUS" = "200" ]; then
+          echo "HTTP health check passed — healthy"
+          echo "healthy=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        echo "HTTP health check failed — falling back to instance state polling"
 
         HEALTHY="false"
         MAX_ATTEMPTS=10
