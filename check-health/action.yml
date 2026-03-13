@@ -1,5 +1,5 @@
 name: Check Azure Functions Health
-description: Queries instance state via az webapp list-instances and reports whether the function is healthy.
+description: Queries instance state via az webapp list-instances and reports whether the function is healthy relative to pre-deploy state.
 
 inputs:
   app-name:
@@ -8,6 +8,10 @@ inputs:
   resource-group:
     description: Azure resource group name
     required: true
+  pre-deploy-states:
+    description: Comma-separated instance states captured before deployment (from save action)
+    required: false
+    default: ''
 
 outputs:
   healthy:
@@ -23,6 +27,23 @@ runs:
       run: |
         APP_NAME="${{ inputs.app-name }}"
         RG="${{ inputs.resource-group }}"
+        PRE_DEPLOY_STATES="${{ inputs.pre-deploy-states }}"
+
+        # If all instances were already STOPPED before deploy, skip health check
+        if [ -n "$PRE_DEPLOY_STATES" ]; then
+          ALL_PRE_STOPPED=true
+          for state in $(echo "$PRE_DEPLOY_STATES" | tr ',' '\n'); do
+            if [ "$state" != "STOPPED" ]; then
+              ALL_PRE_STOPPED=false
+              break
+            fi
+          done
+          if [ "$ALL_PRE_STOPPED" = "true" ]; then
+            echo "All instances were already STOPPED before deployment — skipping health check"
+            echo "healthy=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+        fi
 
         echo "Waiting 10 seconds for function host restart..."
         sleep 10
