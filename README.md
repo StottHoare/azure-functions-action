@@ -83,14 +83,14 @@ Builds a .NET project and optionally runs tests, publishing results via `dorny/t
 | Name | Required | Description |
 |------|----------|-------------|
 | `dotnet-version` | yes | .NET version e.g. `8.0`, `9.0`, `10.0` |
-| `run-tests` | yes | Whether to run tests (`'true'` or `'false'`) |
+| `dotnet-version` | yes | .NET version e.g. `8.0`, `9.0`, `10.0` |
 | `csproj-path` | yes | Relative path to the `.csproj` to build |
 | `environment` | yes | Environment name e.g. `Development`, `Production`. Passed to tests via `DOTNET_ENVIRONMENT` and `AZURE_FUNCTIONS_ENVIRONMENT`. |
 | `github-action-client-id` | yes | Client ID of the GitHub Actions service principal |
 | `subscription-id` | yes | Azure Subscription ID |
 | `tenant-id` | yes | Azure Tenant ID |
 | `packages-token` | yes | Token for authenticating to the GitHub Packages NuGet feed |
-| `app-configuration-connection-string` | yes | App Configuration connection string passed to tests |
+| `app-configuration-connection-string` | yes | App Configuration connection string passed to tests via `APP_CONFIGURATION_CONNECTION_STRING` |
 | `cache` | no | Whether to cache NuGet packages in `setup-dotnet`. Defaults to `true`. |
 
 **Example**
@@ -114,7 +114,6 @@ jobs:
       - uses: StottHoare/azure-functions-action/test-code@main
         with:
           dotnet-version: '8.0'
-          run-tests: 'true'
           csproj-path: src/DataGateway/DataGateway.Tests.csproj
           environment: Development
           github-action-client-id: ${{ vars.AZURE_APPREG_GITHUBACTIONS_CLIENT_ID }}

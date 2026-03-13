@@ -7,9 +7,6 @@ inputs:
   dotnet-version:
     required: true
     description: '`8.0` | `9.0` | `10.0`'
-  run-tests:
-    required: true
-    description: Whether to run tests
   csproj-path:
     required: true
     description: Relative path to .csproj to be built
@@ -30,7 +27,7 @@ inputs:
     description: Token for authenticating to the GitHub Packages NuGet feed
   app-configuration-connection-string:
     required: true
-    description: App Configuration connection string, passed to tests via environment variable
+    description: App Configuration connection string, passed to tests via APP_CONFIGURATION_CONNECTION_STRING
   cache:
     required: false
     default: 'true'
@@ -63,17 +60,16 @@ runs:
         subscription-id: ${{ inputs.subscription-id }}
 
     - name: Run tests
-      if: ${{ inputs.run-tests == 'true' }}
       shell: bash
       run: dotnet test "${{ inputs.csproj-path }}" --configuration Release --no-build --logger "trx;LogFileName=test-results.trx"
       env:
         DOTNET_ENVIRONMENT: ${{ inputs.environment }}
         AZURE_FUNCTIONS_ENVIRONMENT: ${{ inputs.environment }}
-        APP_CONFIGURATION_CONNECTION_STRING: ${{ inputs.app-configuration-connection-string }}
         NUGET_AUTH_TOKEN: ${{ inputs.packages-token }}
+        APP_CONFIGURATION_CONNECTION_STRING: ${{ inputs.app-configuration-connection-string }}
 
     - name: Publish test results
-      if: ${{ inputs.run-tests == 'true' }}
+      if: always()
       uses: dorny/test-reporter@v1
       with:
         name: Test Results (${{ inputs.environment }})
