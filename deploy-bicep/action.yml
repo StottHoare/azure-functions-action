@@ -1,0 +1,97 @@
+name: Deploy Bicep Resources
+description: >
+  Deploys a Bicep template at subscription scope.
+  Caller must have already run actions/checkout@v4 before calling this action.
+
+inputs:
+  deployment-name:
+    required: true
+    description: |
+      Name of the deployment. -${environment} will be appended. Keep it short.
+  template-file:
+    required: false
+    default: Deployments/Main.bicep
+    description: Path to the main .bicep template file
+  github-action-client-id:
+    required: true
+    description: Client ID of the GitHub Actions service principal used to authenticate to Azure
+  github-action-object-id:
+    required: true
+    description: Object ID of the GitHub Actions service principal, passed to Bicep for role assignments
+  subscription-id:
+    required: true
+    description: Azure Subscription ID
+  tenant-id:
+    required: true
+    description: Azure Tenant ID
+  azure-region:
+    required: false
+    default: australiaeast
+    description: Azure region for the deployment
+  environment:
+    required: true
+    description: Environment name (e.g. Development | Production)
+  app-service-source-control-token:
+    required: true
+    description: |
+      GitHub PAT with repo scope. Registered at subscription level to allow the
+      Microsoft.Web/sites/sourcecontrols Bicep resource to deploy via service principal.
+
+runs:
+  using: composite
+  steps:
+    - name: Azure login
+      uses: azure/login@v2
+      with:
+        client-id: ${{ inputs.github-action-client-id }}
+        tenant-id: ${{ inputs.tenant-id }}
+        subscription-id: ${{ inputs.subscription-id }}
+
+    - name: Register GitHub token for Deployment Center
+      # Why: The Microsoft.Web/sites/sourcecontrols bicep resource (configured in FunctionV2.bicep)
+      # requires Azure to look up the deploying identity as a "user" with a linked GitHub OAuth token.
+      # When deploying via a service principal (as GitHub Actions does), Azure cannot find this user
+      # and fails with: "Cannot find User with name {service-principal-object-id}".
+      #
+      # How: Registering a GitHub PAT at the subscription level (/providers/Microsoft.Web/sourceControls/GitHub)
+      # creates the user record Azure expects, allowing the sourcecontrols resource to deploy successfully.
+      # The Azure Portal does this transparently when you link GitHub via the Deployment Center UI.
+      #
+      # Secret: app-service-source-control-token must be a GitHub PAT with repo scope.
+      shell: bash
+      run: |
+        az rest \
+          --method put \
+          --url "https://management.azure.com/providers/Microsoft.Web/sourceControls/GitHub?api-version=2018-02-01" \
+          --body "{\"properties\": {\"token\": \"${{ inputs.app-service-source-control-token }}\"}}"
+
+    - name: Deploy Bicep template
+      id: deploy
+      uses: azure/bicep-deploy@v2
+      continue-on-error: true
+      with:
+        type: deployment
+        operation: create
+        name: ${{ inputs.deployment-name }}-${{ inputs.environment }}
+        location: ${{ inputs.azure-region }}
+        scope: subscription
+        subscription-id: ${{ inputs.subscription-id }}
+        template-file: ${{ inputs.template-file }}
+        parameters: >
+          {
+            "environment": "${{ inputs.environment }}",
+            "location": "${{ inputs.azure-region }}",
+            "githubActionsAppRegistrationObjectId": "${{ inputs.github-action-object-id }}",
+            "githubRepoUrl": "${{ github.server_url }}/${{ github.repository }}",
+            "githubBranch": "${{ github.ref_name }}"
+          }
+
+    - name: Surface deployment errors
+      if: steps.deploy.outcome == 'failure'
+      shell: bash
+      run: |
+        pip install azure-identity azure-mgmt-resource-deployments -q
+        python ServiceDeployment/Scripts/get_bicep_deployment_errors.py \
+          "${{ inputs.subscription-id }}" \
+          "${{ inputs.deployment-name }}-${{ inputs.environment }}"
+        exit 1

@@ -8,6 +8,60 @@ Composite GitHub Actions for Azure Function App deployment lifecycle: build and 
 
 ## Actions
 
+### `StottHoare/azure-functions-action/deploy-bicep@main`
+
+Deploys a Bicep template at subscription scope. On failure, runs a Python script (`ServiceDeployment/Scripts/get_bicep_deployment_errors.py`) to surface detailed error messages before exiting non-zero.
+
+**Caller responsibilities:**
+- Run `actions/checkout@v4` (with submodules if needed) before calling this action
+- Set `permissions: id-token: write, contents: read` on the job
+- Set `environment:` on the job if required
+- Add `if: ${{ !contains(github.event.head_commit.message, '[skipazuredeploy]') }}` to the job if skip behaviour is needed
+
+**Inputs**
+
+| Name | Required | Description |
+|------|----------|-------------|
+| `deployment-name` | yes | Name of the deployment. `-{environment}` is appended. Keep it short. |
+| `environment` | yes | Environment name e.g. `Development`, `Production` |
+| `github-action-client-id` | yes | Client ID of the GitHub Actions service principal |
+| `github-action-object-id` | yes | Object ID of the GitHub Actions service principal, passed to Bicep for role assignments |
+| `subscription-id` | yes | Azure Subscription ID |
+| `tenant-id` | yes | Azure Tenant ID |
+| `app-service-source-control-token` | yes | GitHub PAT with `repo` scope, registered at subscription level to allow `Microsoft.Web/sites/sourcecontrols` to deploy via service principal |
+| `template-file` | no | Path to the main `.bicep` file. Defaults to `Deployments/Main.bicep`. |
+| `azure-region` | no | Azure region for the deployment. Defaults to `australiaeast`. |
+
+**Example**
+
+```yaml
+jobs:
+  bicep:
+    runs-on: ubuntu-latest
+    environment: Production
+    permissions:
+      id-token: write
+      contents: read
+    if: ${{ !contains(github.event.head_commit.message, '[skipazuredeploy]') }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          token: ${{ secrets.SUBMODULES_TOKEN }}
+
+      - uses: StottHoare/azure-functions-action/deploy-bicep@main
+        with:
+          deployment-name: DataGateway
+          environment: Production
+          github-action-client-id: ${{ vars.AZURE_APPREG_GITHUBACTIONS_CLIENT_ID }}
+          github-action-object-id: ${{ vars.AZURE_APPREG_GITHUBACTIONS_OBJECT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          app-service-source-control-token: ${{ secrets.AZURE_APP_SERVICE_SOURCE_CONTROL_TOKEN }}
+```
+
+---
+
 ### `StottHoare/azure-functions-action/test-bicep@main`
 
 Runs a what-if deployment for a Bicep template at subscription scope. Useful in PR workflows to preview infrastructure changes before merging.
