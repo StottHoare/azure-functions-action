@@ -79,8 +79,8 @@ runs:
       run: |
         APP="${{ steps.get-resource-prefix.outputs.resourcePrefix }}-${{ inputs.function-name }}"
         RG=$(az functionapp list --query "[?name=='$APP'].resourceGroup" -o tsv)
-        echo "appName=$APP" >> $GITHUB_OUTPUT
-        echo "resourceGroup=$RG" >> $GITHUB_OUTPUT
+        echo "appName=$APP" >> "$GITHUB_OUTPUT"
+        echo "resourceGroup=$RG" >> "$GITHUB_OUTPUT"
 
     - name: Save current deployment
       id: save
