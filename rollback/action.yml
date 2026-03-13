@@ -6,9 +6,22 @@ inputs:
     description: Full Azure Function App name e.g. shd-DataGateway-func
     required: true
 
+outputs:
+  rollback-time:
+    description: UTC timestamp recorded before the rollback deploy, for use as start-time in a subsequent check-health call
+    value: ${{ steps.record-time.outputs.rollback-time }}
+
 runs:
   using: composite
   steps:
+    - name: Record rollback time
+      id: record-time
+      shell: bash
+      run: |
+        ROLLBACK_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        echo "rollback-time=$ROLLBACK_TIME" >> "$GITHUB_OUTPUT"
+        echo "Rollback time recorded: $ROLLBACK_TIME"
+
     - name: Check previous.zip exists
       shell: bash
       run: |

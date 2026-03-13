@@ -57,6 +57,12 @@ Re-deploys `previous.zip` to the Function App via Kudu zip deploy. If `previous.
 
 Fails if the Kudu API returns a status other than `200` or `202`.
 
+**Outputs**
+
+| Name | Description |
+|------|-------------|
+| `rollback-time` | UTC timestamp recorded before the rollback deploy. Pass this as `start-time` to a subsequent `check-health` call. |
+
 **Inputs**
 
 | Name | Required | Description |
@@ -106,6 +112,7 @@ jobs:
           start-time: ${{ steps.save.outputs.deploy-time }}
 
       - name: Rollback if unhealthy
+        id: rollback
         if: steps.health.outputs.healthy == 'false'
         uses: StottHoare/azure-functions-action/rollback@main
         with:
@@ -118,7 +125,7 @@ jobs:
         with:
           app-name: shd-DataGateway-func
           resource-group: shd-prod-rg
-          start-time: ${{ steps.save.outputs.deploy-time }}
+          start-time: ${{ steps.rollback.outputs.rollback-time }}
 
       - name: Fail if rollback also unhealthy
         if: steps.health.outputs.healthy == 'false' && steps.health-after-rollback.outputs.healthy == 'false'
