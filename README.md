@@ -113,7 +113,7 @@ jobs:
 
 ### `StottHoare/azure-functions-action/save@main`
 
-Downloads the current deployed `wwwroot` as `previous.zip` for potential rollback, and records the time of the save as `deploy-time`.
+Downloads the current deployed `wwwroot` as `previous.zip` for potential rollback, and snapshots instance states before deployment.
 
 If the download fails or returns an empty file (e.g. on a first deploy), a warning is logged and the action continues — rollback simply won't be available.
 
@@ -126,25 +126,25 @@ If the download fails or returns an empty file (e.g. on a first deploy), a warni
 
 **Outputs**
 
-| Name          | Description                                                                                                                                             |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `deploy-time` | UTC timestamp recorded before the download, e.g. `2024-01-15T10:30:00Z`. Pass this as `start-time` to `check-health` to exclude pre-deployment metrics. |
+| Name                | Description                                                                                       |
+| ------------------- | ------------------------------------------------------------------------------------------------- |
+| `pre-deploy-states` | Comma-separated instance states captured before deployment. Pass to `check-health` for baseline. |
 
 ---
 
 ### `StottHoare/azure-functions-action/check-health@main`
 
-Queries the `azure.functions.health_check.reports` custom metric in Application Insights. Waits 10 seconds for the function host to restart, then retries up to 6 times (30 seconds apart) before reporting a result.
+Queries instance states via `az webapp list-instances`. Waits 10 seconds for the function host to restart, then retries up to 6 times (30 seconds apart) before reporting a result.
 
-A `valueMax >= 1` indicates a healthy probe. If no data is returned after all attempts, `healthy` is set to `false`.
+All instances `READY` is healthy. Any `STOPPED` instance is unhealthy. If `pre-deploy-states` shows all instances were already `STOPPED` before deployment, the health check is skipped and `healthy` is set to `true`.
 
 **Inputs**
 
-| Name             | Required | Description                                                                                                                                                                    |
-| ---------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `app-name`       | yes      | Full Azure Function App name                                                                                                                                                   |
-| `resource-group` | yes      | Azure resource group. The App Insights resource name is derived by replacing `-rg` with `-appi` (e.g. `shd-prod-rg` → `shd-prod-appi`)                                         |
-| `start-time`     | yes      | ISO8601 UTC timestamp. Only metric data after this time is considered, preventing pre-deployment readings from causing a false pass. Use the `deploy-time` output from `save`. |
+| Name                | Required | Description                                                                                        |
+| ------------------- | -------- | -------------------------------------------------------------------------------------------------- |
+| `app-name`          | yes      | Full Azure Function App name                                                                       |
+| `resource-group`    | yes      | Azure resource group containing the Function App                                                   |
+| `pre-deploy-states` | no       | Comma-separated instance states from the `save` action. Used to skip health check if all were already `STOPPED`. |
 
 **Outputs**
 
@@ -159,12 +159,6 @@ A `valueMax >= 1` indicates a healthy probe. If no data is returned after all at
 Re-deploys `previous.zip` to the Function App via Kudu zip deploy. If `previous.zip` does not exist or is empty, the action logs a message and exits successfully without doing anything.
 
 Fails if the Kudu API returns a status other than `200` or `202`.
-
-**Outputs**
-
-| Name            | Description                                                                                                       |
-| --------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `rollback-time` | UTC timestamp recorded before the rollback deploy. Pass this as `start-time` to a subsequent `check-health` call. |
 
 **Inputs**
 
@@ -321,7 +315,7 @@ jobs:
         with:
           app-name: shd-DataGateway-func
           resource-group: shd-prod-rg
-          start-time: ${{ steps.save.outputs.deploy-time }}
+          pre-deploy-states: ${{ steps.save.outputs.pre-deploy-states }}
 
       - name: Rollback if unhealthy
         id: rollback
@@ -337,7 +331,6 @@ jobs:
         with:
           app-name: shd-DataGateway-func
           resource-group: shd-prod-rg
-          start-time: ${{ steps.rollback.outputs.rollback-time }}
 
       - name: Fail if rollback also unhealthy
         if: steps.health.outputs.healthy == 'false' && steps.health-after-rollback.outputs.healthy == 'false'
@@ -346,15 +339,3 @@ jobs:
           exit 1
 ```
 
----
-
-## App Insights naming convention
-
-`check-health` derives the Application Insights resource name from the resource group by replacing the `-rg` suffix with `-appi`:
-
-| Resource group       | App Insights           |
-| -------------------- | ---------------------- |
-| `shd-prod-rg`        | `shd-prod-appi`        |
-| `shd-DataGateway-rg` | `shd-DataGateway-appi` |
-
-If your naming convention differs, raise an issue or open a PR to add an explicit `app-insights-name` input.
