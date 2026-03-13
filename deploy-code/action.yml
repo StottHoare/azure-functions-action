@@ -83,6 +83,12 @@ runs:
         echo "appName=$APP" >> "$GITHUB_OUTPUT"
         echo "resourceGroup=$RG" >> "$GITHUB_OUTPUT"
 
+    - name: Save current deployment
+      uses: StottHoare/azure-functions-action/save@main
+      with:
+        app-name: ${{ steps.resolve.outputs.appName }}
+        resource-group: ${{ steps.resolve.outputs.resourceGroup }}
+
     - name: Deploy Azure Function Code
       uses: Azure/functions-action@v1
       with:
