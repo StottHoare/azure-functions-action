@@ -90,6 +90,7 @@ The all-in-one action. Builds a .NET project, deploys it to a Function App, chec
 | `subscription-id` | yes | Azure Subscription ID |
 | `tenant-id` | yes | Azure Tenant ID |
 | `resource-prefix` | no | Resource prefix e.g. `shd` or `shp`. Derived from branch name if omitted (`main` → `shp`, else `shd`) |
+| `cache` | no | Whether to cache NuGet packages in `setup-dotnet`. Defaults to `true`. |
 
 **Example**
 
